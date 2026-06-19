@@ -1,0 +1,60 @@
+From 14b82eeaa33ccf0d20dc450675de39c741923884 Mon Sep 17 00:00:00 2001
+From: nunogt <nunogt@gmail.com>
+Date: Fri, 19 Jun 2026 19:16:08 +0100
+Subject: [PATCH] AP: Defer beacon set in hostapd_reload_bss() until interface
+ is enabled
+
+hostapd_reload_bss() calls ieee802_11_set_beacon() unconditionally, guarded
+only by hapd->started. hapd->started is set in hostapd_setup_bss() during
+interface bring-up, before channel selection (ACS) or DFS CAC completes. If a
+configuration reload occurs while the interface is still in HAPD_IFACE_ACS (or
+HAPD_IFACE_DFS), the BSS has started == 1 but iface->state != HAPD_IFACE_ENABLED,
+i.e. there is no valid operating channel yet.
+
+ieee802_11_set_beacon() -> __ieee802_11_set_beacon() does not check the
+interface state (only !drv_priv and csa_in_progress), so it proceeds to
+hostapd_drv_set_ap() and the driver rejects the request with "Failed to set
+beacon parameters". The new Beacon -- which, with IEEE 802.11r enabled, carries
+the Mobility Domain element -- is never installed, and the interface keeps
+radiating the previous Beacon (without the MDE). With multiple radios the
+failure is non-deterministic: whichever radio is still completing ACS when the
+cross-interface beacon refresh runs is the one that fails.
+
+Defer the beacon update until the interface reaches HAPD_IFACE_ENABLED,
+mirroring the guard already used for the OWE transition beacon update. When
+ACS/DFS completes, hostapd_setup_interface_complete_sync() installs the Beacon
+via ieee802_11_set_beacons(), so the deferred update is not lost.
+
+Signed-off-by: YOUR NAME <YOUR EMAIL>
+---
+ src/ap/hostapd.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 7d924893f..19470cf64 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -186,7 +186,19 @@ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ 
+ 	hostapd_neighbor_sync_own_report(hapd);
+ 
+-	ieee802_11_set_beacon(hapd);
++	/*
++	 * Do not push a new Beacon while the interface has not finished coming
++	 * up (e.g., ACS or DFS CAC still in progress on a configuration reload).
++	 * hapd->started is set during bring-up before channel selection
++	 * completes, so it is not sufficient on its own: with started == 1 but
++	 * iface->state != HAPD_IFACE_ENABLED there is no valid operating channel
++	 * and the driver rejects set_ap ("Failed to set beacon parameters"),
++	 * dropping the new Beacon (which, with IEEE 802.11r, carries the
++	 * Mobility Domain element). The Beacon is installed once the interface
++	 * reaches HAPD_IFACE_ENABLED.
++	 */
++	if (hapd->iface->state == HAPD_IFACE_ENABLED)
++		ieee802_11_set_beacon(hapd);
+ 	hostapd_update_wps(hapd);
+ 
+ 	if (hapd->conf->ssid.ssid_set &&
+-- 
+2.54.0
+
