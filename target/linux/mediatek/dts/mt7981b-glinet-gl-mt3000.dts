@@ -114,6 +114,8 @@
 		reg = <5>;
 		compatible = "ethernet-phy-ieee802.3-c45";
 		phy-mode = "2500base-x";
+		eee-broken-1000t;
+		eee-broken-100tx;
 	};
 };
 
