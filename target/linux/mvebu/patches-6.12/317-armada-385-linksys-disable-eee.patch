@@ -1,0 +1,56 @@
+--- a/arch/arm/boot/dts/marvell/armada-385-linksys.dtsi
++++ b/arch/arm/boot/dts/marvell/armada-385-linksys.dtsi
+@@ -169,6 +169,21 @@
+ 		compatible = "marvell,mv88e6085";
+ 		reg = <0>;
+ 
++		mdio {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			/* The Marvell switch internal port PHYs advertise 802.3az EEE
++			 * but mistime the LPI wake against downstream PHYs, flapping
++			 * the 1000BASE-T link. De-advertise EEE so it never activates
++			 * (802.3az needs both link partners to advertise it). */
++			swphy0: ethernet-phy@0 { reg = <0>; eee-broken-100tx; eee-broken-1000t; };
++			swphy1: ethernet-phy@1 { reg = <1>; eee-broken-100tx; eee-broken-1000t; };
++			swphy2: ethernet-phy@2 { reg = <2>; eee-broken-100tx; eee-broken-1000t; };
++			swphy3: ethernet-phy@3 { reg = <3>; eee-broken-100tx; eee-broken-1000t; };
++			swphy4: ethernet-phy@4 { reg = <4>; eee-broken-100tx; eee-broken-1000t; };
++		};
++
+ 		ethernet-ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+@@ -176,26 +191,31 @@
+ 			ethernet-port@0 {
+ 				reg = <0>;
+ 				label = "lan4";
++				phy-handle = <&swphy0>;
+ 			};
+ 
+ 			ethernet-port@1 {
+ 				reg = <1>;
+ 				label = "lan3";
++				phy-handle = <&swphy1>;
+ 			};
+ 
+ 			ethernet-port@2 {
+ 				reg = <2>;
+ 				label = "lan2";
++				phy-handle = <&swphy2>;
+ 			};
+ 
+ 			ethernet-port@3 {
+ 				reg = <3>;
+ 				label = "lan1";
++				phy-handle = <&swphy3>;
+ 			};
+ 
+ 			ethernet-port@4 {
+ 				reg = <4>;
+ 				label = "wan";
++				phy-handle = <&swphy4>;
+ 			};
+ 
+ 			ethernet-port@6 {
